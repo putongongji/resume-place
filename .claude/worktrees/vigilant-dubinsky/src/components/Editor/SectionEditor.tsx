@@ -39,7 +39,7 @@ export function SectionEditor({ section, onChange, onDelete }: Props) {
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.4 : 1,
+    opacity: isDragging ? 0.5 : 1,
   };
 
   const sensors = useSensors(
@@ -79,55 +79,59 @@ export function SectionEditor({ section, onChange, onDelete }: Props) {
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+
     if (over && active.id !== over.id) {
       const oldIndex = section.items.findIndex((i) => i.id === active.id);
       const newIndex = section.items.findIndex((i) => i.id === over.id);
-      onChange(section.id, { ...section, items: arrayMove(section.items, oldIndex, newIndex) });
+      
+      const newItems = arrayMove(section.items, oldIndex, newIndex);
+      onChange(section.id, { ...section, items: newItems });
     }
   };
 
   return (
-    <div
-      ref={setNodeRef}
+    <div 
+      ref={setNodeRef} 
       style={{ ...style, position: 'relative' }}
-      className="section-container"
+      className="mb-6 glass-card p-5 section-container"
     >
-      {/* Section header */}
-      <div className="flex items-center gap-2 mb-1">
-        <div
-          {...attributes}
-          {...listeners}
-          className="drag-handle cursor-grab active:cursor-grabbing opacity-0 hover:opacity-40 transition-opacity"
-        >
-          <GripVertical size={16} />
+      <div className="flex items-center justify-between mb-5 border-b border-stone-200/50 pb-3">
+        <div className="flex items-center gap-3 flex-1">
+          <div 
+            {...attributes} 
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing text-stone-300 transition-colors drag-handle hover:text-stone-500"
+          >
+            <GripVertical size={20} />
+          </div>
+          <input
+            type="text"
+            className="input-field text-xl font-bold bg-transparent border-transparent hover:bg-white/40 focus:bg-white/80"
+            style={{ padding: '0.25rem 0.5rem', marginLeft: '-0.5rem', width: '50%', minWidth: '200px' }}
+            value={section.title}
+            onChange={handleTitleChange}
+            placeholder="模块名称 (如：教育经历)"
+          />
         </div>
-        <input
-          type="text"
-          className="input-field text-base font-semibold flex-1"
-          value={section.title}
-          onChange={handleTitleChange}
-          placeholder="模块名称"
-          style={{ paddingTop: '8px', paddingBottom: '8px' }}
-        />
-        <button
-          className="btn-icon delete-section-btn hover:!text-red-500 hover:!bg-red-50"
+        <button 
+          className="btn-icon delete-section-btn text-stone-400 hover:text-red-600 transition-opacity hover:bg-red-50/50 ml-2"
           onClick={() => onDelete(section.id)}
+          title="删除整个模块"
         >
-          <Trash2 size={15} />
+          <Trash2 size={18} />
         </button>
       </div>
 
-      {/* Items */}
-      <div className="ml-6">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={section.items.map(i => i.id)}
+          strategy={verticalListSortingStrategy}
         >
-          <SortableContext
-            items={section.items.map(i => i.id)}
-            strategy={verticalListSortingStrategy}
-          >
+          <div className="flex flex-col gap-3">
             {section.items.map((item) => (
               <ItemEditor
                 key={item.id}
@@ -136,14 +140,17 @@ export function SectionEditor({ section, onChange, onDelete }: Props) {
                 onDelete={handleItemDelete}
               />
             ))}
-          </SortableContext>
-        </DndContext>
+          </div>
+        </SortableContext>
+      </DndContext>
 
-        <button
-          className="btn text-[13px] text-[#999] hover:text-black mt-2 py-2 transition-colors"
+      <div className="mt-4">
+        <button 
+          className="btn btn-secondary w-full border-dashed border-stone-300 bg-white/40 glass-card" 
+          style={{ padding: '0.6rem 1rem' }} 
           onClick={handleAddItem}
         >
-          <Plus size={14} /> 添加
+          <Plus size={16} /> 添加一项 {section.title}
         </button>
       </div>
     </div>

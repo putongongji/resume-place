@@ -37,13 +37,12 @@ export function PreviewPane({ data }: Props) {
           {personalInfo.name || '姓名'}
         </h1>
         {personalInfo.title && (
-          <p style={{
-            fontSize: '1rem',
-            fontWeight: 500,
-            margin: '0.25rem 0 0.75rem 0',
+          <p style={{ 
+            fontSize: '1.25rem', 
+            fontWeight: 500, 
+            margin: '0 0 0.75rem 0', 
             fontFamily: sansFontFamily,
-            color: '#333',
-            letterSpacing: '0.02em'
+            opacity: 0.9 
           }}>
             {personalInfo.title}
           </p>

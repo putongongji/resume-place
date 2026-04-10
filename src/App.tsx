@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import { useResume } from './hooks/useResume';
+import { useAnalysis } from './hooks/useAnalysis';
 import { PersonalInfoForm } from './components/Editor/PersonalInfoForm';
 import { SectionEditor } from './components/Editor/SectionEditor';
 import { PreviewPane } from './components/Preview/PreviewPane';
 import { ResumeManager } from './components/Editor/ResumeManager';
-import { Plus } from 'lucide-react';
+import { AIPanel } from './components/AIPanel/AIPanel';
+import { Plus, Download, RotateCcw, Sparkles } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import {
   DndContext,
@@ -23,34 +26,35 @@ import {
 import type { Section } from './types/resume';
 
 function App() {
-  const { 
-    resumeData, 
+  const {
+    resumeData,
     allResumes,
     activeResumeId,
-    updatePersonalInfo, 
-    updateSections, 
+    updatePersonalInfo,
+    updateSections,
     switchResume,
     createResume,
     duplicateResume,
     deleteResume,
     renameResume,
-    resetToDefault 
+    resetToDefault
   } = useResume();
 
+  const { 
+    status, result, error, streamedText, history,
+    analyze, reset: resetAnalysis, setStatus, setResult, deleteHistory 
+  } = useAnalysis();
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+
   const handlePrint = () => {
-    // Generate smart filename
     const { name } = resumeData.personalInfo;
     const versionTitle = resumeData.versionTitle;
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const filename = `${name || '简历'}-${versionTitle}-${date}`;
-    
-    // Save original title and set new one temporarily for printing
+
     const originalTitle = document.title;
     document.title = filename;
-    
     window.print();
-    
-    // Restore original title
     document.title = originalTitle;
   };
 
@@ -63,26 +67,21 @@ function App() {
 
   const handleSectionDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-
     if (over && active.id !== over.id) {
       const oldIndex = resumeData.sections.findIndex((s) => s.id === active.id);
       const newIndex = resumeData.sections.findIndex((s) => s.id === over.id);
-      
-      const newSections = arrayMove(resumeData.sections, oldIndex, newIndex);
-      updateSections(newSections);
+      updateSections(arrayMove(resumeData.sections, oldIndex, newIndex));
     }
   };
 
   const handleSectionChange = (sectionId: string, updatedSection: Section) => {
-    const newSections = resumeData.sections.map((s) =>
+    updateSections(resumeData.sections.map((s) =>
       s.id === sectionId ? updatedSection : s
-    );
-    updateSections(newSections);
+    ));
   };
 
   const handleSectionDelete = (sectionId: string) => {
-    const newSections = resumeData.sections.filter((s) => s.id !== sectionId);
-    updateSections(newSections);
+    updateSections(resumeData.sections.filter((s) => s.id !== sectionId));
   };
 
   const handleAddSection = () => {
@@ -95,25 +94,36 @@ function App() {
     updateSections([...resumeData.sections, newSection]);
   };
 
+  const handleAnalyze = (input: string, isUrl: boolean, customResumeText?: string) => {
+    analyze(resumeData, input, isUrl, customResumeText);
+  };
+
+  const handleResetAnalysis = () => {
+    resetAnalysis();
+  };
+
   return (
-    <div className="flex flex-col lg:flex-row h-screen w-full overflow-hidden text-[#09090b] bg-[#f4f4f5]">
-      
-      {/* Editor Pane - Minimal Flat Panel */}
-      <div className="editor-pane w-full lg:w-[600px] lg:max-w-[45vw] h-[50vh] lg:h-[calc(100vh-2rem)] lg:m-4 z-10 shrink-0 overflow-y-auto glass-panel lg:rounded-3xl flex flex-col relative print-hide border-b border-[#e4e4e7] lg:border-none">
-        <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-[#e4e4e7] p-4 lg:p-6 flex justify-between items-center lg:rounded-t-3xl shadow-sm">
-          <h1 className="heading-1">简历工作台</h1>
-          <button 
-            className="btn btn-secondary text-xs"
-            onClick={resetToDefault}
-          >
-            重置示例数据
-          </button>
+    <div className="flex flex-col lg:flex-row h-screen w-full overflow-hidden bg-[#f5f5f5]">
+
+      {/* ─── Editor ─── */}
+      <div className="editor-pane w-full lg:w-[520px] lg:max-w-[42vw] h-[50vh] lg:h-screen shrink-0 overflow-y-auto bg-white flex flex-col relative print-hide border-r border-[#eee]">
+
+        {/* Header */}
+        <div className="sticky top-0 z-20 bg-white border-b border-[#f0f0f0]">
+          <div className="flex justify-between items-center px-8 py-5">
+            <h1 className="heading-1">简历</h1>
+            <button
+              className="btn-icon"
+              onClick={resetToDefault}
+              title="重置示例数据"
+            >
+              <RotateCcw size={16} />
+            </button>
+          </div>
         </div>
 
-        <div className="p-6 flex-1 flex flex-col gap-6">
-          <p className="text-sm text-[#57534E] mb-2 px-1">
-            请在下方填写您的简历信息。您可以随时拖拽调整模块的顺序。
-          </p>
+        {/* Content */}
+        <div className="px-8 py-6 flex-1 flex flex-col gap-8">
 
           <ResumeManager
             resumes={allResumes}
@@ -125,67 +135,98 @@ function App() {
             onRename={renameResume}
           />
 
-          <div className="h-px bg-[#e4e4e7] my-2" />
+          <div className="divider" />
 
           <PersonalInfoForm
             data={resumeData.personalInfo}
             onChange={updatePersonalInfo}
           />
 
-          <div className="mt-8 mb-4 flex items-center justify-between">
-            <h3 className="heading-2">所有模块</h3>
+          <div className="divider" />
+
+          <div>
+            <h3 className="heading-2 mb-5">模块</h3>
+
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleSectionDragEnd}
+            >
+              <SortableContext
+                items={resumeData.sections.map(s => s.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="flex flex-col gap-6">
+                  {resumeData.sections.map((section) => (
+                    <SectionEditor
+                      key={section.id}
+                      section={section}
+                      onChange={handleSectionChange}
+                      onDelete={handleSectionDelete}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+
+            <button
+              className="btn btn-secondary w-full mt-6 border-dashed"
+              style={{ padding: '12px' }}
+              onClick={handleAddSection}
+            >
+              <Plus size={16} /> 添加模块
+            </button>
           </div>
 
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleSectionDragEnd}
-          >
-            <SortableContext
-              items={resumeData.sections.map(s => s.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <div className="flex flex-col gap-4">
-                {resumeData.sections.map((section) => (
-                  <SectionEditor
-                    key={section.id}
-                    section={section}
-                    onChange={handleSectionChange}
-                    onDelete={handleSectionDelete}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-
-          <button 
-            className="btn btn-secondary w-full mt-2 flex justify-center border-dashed border-[#d6d3d1] transition-colors bg-white/40 glass-card"
-            style={{ padding: '0.875rem' }}
-            onClick={handleAddSection}
-          >
-            <Plus size={20} /> 添加新模块
-          </button>
+          {/* Bottom spacing */}
+          <div className="h-12" />
         </div>
       </div>
 
-      {/* Preview Pane - Floating canvas */}
-      <div className="preview-pane flex-1 overflow-y-auto overflow-x-auto flex justify-center items-start p-4 lg:p-8 relative z-0">
-        
-        {/* Fixed Export Button */}
-        <div className="fixed bottom-6 right-6 lg:top-6 lg:bottom-auto lg:right-8 z-30 print-hide">
-          <button 
-            className="btn btn-primary shadow-xl hover:shadow-2xl hover:-translate-y-1"
+      {/* ─── Preview ─── */}
+      <div className="preview-pane flex-1 overflow-y-auto overflow-x-auto flex justify-center items-start relative z-0">
+
+        {/* FABs */}
+        <div className="fixed bottom-8 right-8 z-30 print-hide flex gap-3">
+          <button
+            className="btn btn-secondary shadow-[0_4px_24px_rgba(0,0,0,0.08)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.12)] bg-white"
+            onClick={() => setAiPanelOpen(true)}
+          >
+            <Sparkles size={16} />
+            AI 分析
+          </button>
+          <button
+            className="btn btn-primary shadow-[0_4px_24px_rgba(0,0,0,0.15)] hover:shadow-[0_8px_40px_rgba(0,0,0,0.25)]"
             onClick={handlePrint}
           >
+            <Download size={16} />
             导出 PDF
           </button>
         </div>
-        
-        {/* Shadow wrapper for A4 visual look on screen */}
-        <div className="shadow-[0_4px_24px_rgba(0,0,0,0.06)] print:shadow-none bg-white lg:mt-8 transition-transform duration-300 mx-auto min-w-max">
+
+        {/* A4 Paper */}
+        <div className="my-8 lg:my-12 mx-auto shadow-[0_1px_4px_rgba(0,0,0,0.04),0_8px_32px_rgba(0,0,0,0.06)] print:shadow-none bg-white min-w-max">
           <PreviewPane data={resumeData} />
         </div>
       </div>
+
+      {/* ─── AI Panel ─── */}
+      <AIPanel
+        open={aiPanelOpen}
+        onClose={() => setAiPanelOpen(false)}
+        status={status}
+        result={result}
+        error={error}
+        streamedText={streamedText}
+        history={history}
+        onAnalyze={handleAnalyze}
+        onReset={handleResetAnalysis}
+        onLoadHistoryItem={(item) => {
+          setResult(item.result);
+          setStatus('complete');
+        }}
+        onDeleteHistoryItem={deleteHistory}
+      />
     </div>
   );
 }

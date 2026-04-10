@@ -1,0 +1,202 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
+
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-primary: #09090b; /* Zinc 950 */
+    --color-secondary: #52525b; /* Zinc 600 */
+    --color-border: #e4e4e7; /* Zinc 200 */
+    --color-bg: #f4f4f5; /* Zinc 100 */
+    --color-text: #09090b; 
+    
+    /* Font Stack */
+    --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+
+  body {
+    @apply antialiased text-[#09090b] min-h-screen bg-[#f4f4f5];
+    font-family: var(--font-sans);
+  }
+
+  /* Improve default focus styles for accessibility */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-black ring-offset-2 ring-offset-white;
+  }
+}
+
+/* 彻底隐藏所有由于系统或组件产生的滚动条 */
+::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+* {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important;  /* IE and Edge */
+}
+
+@layer components {
+  /* Minimal Shell Base */
+  .glass-panel {
+    @apply bg-white shadow-xl;
+    border: 1px solid var(--color-border);
+  }
+
+  .glass-card {
+    @apply bg-white rounded-2xl shadow-sm;
+    border: 1px solid var(--color-border);
+    transition: all 0.2s ease-in-out;
+  }
+
+  .glass-card:hover {
+    @apply shadow-md border-[#d4d4d8]; 
+    transform: translateY(-1px);
+  }
+
+  /* Inputs - Minimal style */
+  .input-group {
+    @apply flex flex-col gap-1;
+  }
+  
+  .input-label {
+    @apply text-xs font-medium text-[#52525b] tracking-wide ml-1;
+  }
+  
+  .input-field {
+    @apply w-full rounded-xl border border-[#e4e4e7] bg-[#fafafa] px-3 py-2.5 text-sm text-[#09090b] 
+           transition-all duration-200 placeholder-[#a1a1aa];
+  }
+  
+  .input-field:focus {
+    @apply bg-white border-black ring-1 ring-black outline-none shadow-[0_2px_10px_rgba(0,0,0,0.05)];
+  }
+
+  /* Typography */
+  .heading-1 {
+    @apply text-2xl font-bold tracking-tight text-[#09090b];
+  }
+
+  .heading-2 {
+    @apply text-base font-bold text-[#09090b];
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-all duration-200 active:scale-[0.98];
+  }
+  
+  .btn-primary {
+    @apply bg-[#09090b] text-[#fafafa] px-6 py-2.5 rounded-xl shadow hover:bg-[#27272a] font-medium transition-all;
+  }
+  
+  .btn-secondary {
+    @apply bg-white text-[#09090b] px-4 py-2 rounded-xl hover:bg-[#f4f4f5] border border-[#e4e4e7] shadow-sm font-medium transition-all;
+  }
+
+  .btn-accent {
+    @apply bg-[#09090b] text-[#fafafa] px-6 py-2.5 rounded-xl shadow hover:bg-[#27272a] font-medium transition-all;
+  }
+
+  .btn-icon {
+    @apply flex items-center justify-center p-2 rounded-lg transition-colors duration-200 hover:bg-[#f4f4f5] text-[#71717a] hover:text-[#09090b];
+  }
+}
+
+
+/* Custom Overrides & Print Styles */
+.editor-pane::-webkit-scrollbar {
+  width: 6px;
+}
+.editor-pane::-webkit-scrollbar-track {
+  background: transparent;
+}
+.editor-pane::-webkit-scrollbar-thumb {
+  background-color: rgba(28, 25, 23, 0.15);
+  border-radius: 20px;
+}
+
+@media print {
+  @page {
+    margin: 15mm 20mm; /* Native page margins for every sheet of paper */
+    size: A4;
+  }
+
+  body, html, #root {
+    height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Reset all height and overflow constraints to allow multi-page flow */
+  .h-screen {
+    height: auto !important;
+  }
+  .overflow-hidden, .overflow-y-auto, .overflow-x-auto {
+    overflow: visible !important;
+  }
+  .flex-col.lg\:flex-row {
+    display: block !important;
+  }
+
+  /* Hide UI elements during print */
+  .editor-pane,
+  .print-hide {
+    display: none !important;
+  }
+
+  /* Let preview span document seamlessly */
+  .preview-pane {
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: relative !important; /* CRITICAL: Absolute kills multi-page flow */
+    overflow: visible !important;
+    background: white !important;
+    box-shadow: none !important;
+  }
+
+  .a4-page {
+    width: 170mm !important; /* Exactly 210mm paper width - 20mm left margin - 20mm right margin */
+    min-height: auto !important;
+    height: auto !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important; /* Let @page handle all the spacing naturally safely */
+    box-sizing: border-box !important;
+    page-break-after: auto !important;
+    transform: none !important;
+  }
+}
+
+/* Interaction Utilities (Replacing previous tailwind group-hover) */
+.item-editor-container .delete-btn {
+  opacity: 0;
+  transform: scale(0.95);
+  transition: all 0.2s ease;
+}
+.item-editor-container:hover .delete-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+.item-editor-container .drag-handle {
+  color: #D6D3D1; /* stone-300 */
+}
+.item-editor-container:hover .drag-handle {
+  color: #A8A29E; /* stone-400 */
+}
+
+.section-container .delete-section-btn {
+  opacity: 0;
+  transform: scale(0.95);
+  transition: all 0.2s ease;
+}
+.section-container:hover .delete-section-btn {
+  opacity: 1;
+  transform: scale(1);
+}
