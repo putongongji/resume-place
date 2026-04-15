@@ -7,7 +7,6 @@ export function useAnalysis() {
   const [status, setStatus] = useState<AnalysisStatus>('idle');
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [streamedText, setStreamedText] = useState('');
   const [history, setHistory] = useState<AnalysisHistory[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -36,7 +35,6 @@ export function useAnalysis() {
     setStatus('idle');
     setResult(null);
     setError(null);
-    setStreamedText('');
   }, []);
 
   const fetchJD = async (url: string, signal: AbortSignal): Promise<string> => {
@@ -46,7 +44,12 @@ export function useAnalysis() {
       body: JSON.stringify({ url }),
       signal,
     });
-    const data = await res.json();
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error('获取岗位信息失败');
+    }
     if (!res.ok || data.error) {
       throw new Error(data.error || '获取岗位信息失败');
     }
@@ -57,7 +60,7 @@ export function useAnalysis() {
     resumeData: ResumeData,
     jdInput: string,
     isUrl: boolean,
-    customResumeText?: string
+    extra?: { customResumeText?: string; turnstileToken?: string; adminSecret?: string }
   ) => {
     // Abort any in-flight request
     abortRef.current?.abort();
@@ -66,7 +69,6 @@ export function useAnalysis() {
 
     setResult(null);
     setError(null);
-    setStreamedText('');
 
     try {
       // Step 1: Resolve JD text
@@ -76,75 +78,40 @@ export function useAnalysis() {
         jdText = await fetchJD(jdInput, controller.signal);
       }
 
-      // Step 2: Stream analysis
+      // Step 2: Call analysis API (non-streaming — waits for full response)
       setStatus('analyzing');
-      const bodyPayload = customResumeText 
-        ? { customResumeText, jobDescription: jdText }
+      const bodyPayload = extra?.customResumeText
+        ? { customResumeText: extra.customResumeText, jobDescription: jdText }
         : { resume: resumeData, jobDescription: jdText };
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (extra?.turnstileToken) headers['X-Turnstile-Token'] = extra.turnstileToken;
+      if (extra?.adminSecret) headers['Authorization'] = `Bearer ${extra.adminSecret}`;
+
+      // Client-side timeout (150s) as safety net beyond the backend's 120s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 150_000);
 
       const res = await fetch('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(bodyPayload),
         signal: controller.signal,
       });
 
-      if (!res.ok) {
-        const data = await res.json();
+      clearTimeout(timeoutId);
+
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`分析请求失败 (${res.status})`);
+      }
+
+      if (!res.ok || data.error) {
         throw new Error(data.error || `分析请求失败 (${res.status})`);
       }
 
-      // Read SSE stream
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error('无法读取响应流');
-
-      const decoder = new TextDecoder();
-      let accumulated = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const payload = line.slice(6);
-            if (payload === '[DONE]') continue;
-
-            try {
-              const parsed = JSON.parse(payload);
-              if (parsed.error) throw new Error(parsed.error);
-              if (parsed.text) {
-                accumulated += parsed.text;
-                setStreamedText(accumulated);
-              }
-            } catch {
-              // Skip malformed SSE lines
-            }
-          }
-        }
-      }
-
-      // Parse final JSON
-      // The LLM might wrap JSON in markdown code fences
-      let jsonStr = accumulated.trim();
-      // Strip markdown code fences
-      const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (fenceMatch) {
-        jsonStr = fenceMatch[1].trim();
-      }
-      // If still not valid JSON, try extracting from first { to last }
-      if (!jsonStr.startsWith('{')) {
-        const startIdx = jsonStr.indexOf('{');
-        const endIdx = jsonStr.lastIndexOf('}');
-        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-          jsonStr = jsonStr.slice(startIdx, endIdx + 1);
-        }
-      }
-
-      const parsed = JSON.parse(jsonStr) as AnalysisResult;
+      const parsed = data.result as AnalysisResult;
       setResult(parsed);
       setStatus('complete');
 
@@ -154,27 +121,33 @@ export function useAnalysis() {
         timestamp: new Date().toISOString(),
         isUrl,
         jdInput,
-        resumeSource: customResumeText ? 'pdf' : 'builder',
+        resumeSource: extra?.customResumeText ? 'pdf' : 'builder',
         result: parsed,
       };
-      
+
       setHistory(prev => {
-        const next = [newHistoryItem, ...prev].slice(0, 30); // Keep last 30 items
+        const next = [newHistoryItem, ...prev].slice(0, 30);
         localStorage.setItem('ai-analysis-history', JSON.stringify(next));
         return next;
       });
 
     } catch (err: unknown) {
-      if ((err as Error).name === 'AbortError') return;
+      if ((err as Error).name === 'AbortError') {
+        // Only silence if this was a user-initiated cancel (not a timeout)
+        if (status === 'idle') return; // already reset by user
+        setError('AI 分析超时，请稍后再试');
+        setStatus('error');
+        return;
+      }
       const message = err instanceof Error ? err.message : '分析过程中出错';
       setError(message);
       setStatus('error');
     }
   }, []);
 
-  return { 
-    status, result, error, streamedText, 
+  return {
+    status, result, error,
     analyze, reset, setResult, setStatus,
-    history, deleteHistory 
+    history, deleteHistory
   };
 }

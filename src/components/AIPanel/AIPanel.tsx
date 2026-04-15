@@ -14,9 +14,8 @@ interface Props {
   status: AnalysisStatus;
   result: AnalysisResult | null;
   error: string | null;
-  streamedText: string;
   history: AnalysisHistory[];
-  onAnalyze: (input: string, isUrl: boolean, customResumeText?: string) => void;
+  onAnalyze: (input: string, isUrl: boolean, extra?: { customResumeText?: string; turnstileToken?: string; adminSecret?: string }) => void;
   onReset: () => void;
   onLoadHistoryItem: (item: AnalysisHistory) => void;
   onDeleteHistoryItem: (id: string) => void;
@@ -36,7 +35,6 @@ export function AIPanel({
   status,
   result,
   error,
-  streamedText,
   history,
   onAnalyze,
   onReset,
@@ -47,7 +45,7 @@ export function AIPanel({
 
   const showInput = status === 'idle' || status === 'fetching-jd' || status === 'analyzing';
   const showResults = status === 'complete' && result;
-  const showStreaming = status === 'analyzing' && streamedText && !result;
+  const showStreaming = status === 'analyzing' && !result;
 
   return (
     <>
@@ -126,7 +124,7 @@ export function AIPanel({
 
           {/* Streaming preview */}
           {showStreaming && (
-            <AnalysisProgress streamedText={streamedText} />
+            <AnalysisProgress />
           )}
 
           {/* Error */}

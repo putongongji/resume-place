@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { ResumeData } from '../types/resume';
 import { initialResumeData } from '../data/initialData';
+import { adminResumeData } from '../data/adminData';
 
-const LOCAL_STORAGE_KEY = 'resume-builder-data-v2';
+const GUEST_STORAGE_KEY = 'resume-builder-data-v2';
+const ADMIN_STORAGE_KEY = 'resume-builder-data-v2-admin';
 const OLD_LOCAL_STORAGE_KEY = 'resume-builder-data';
 
 interface ResumeStorage {
@@ -11,16 +13,15 @@ interface ResumeStorage {
   resumes: ResumeData[];
 }
 
-export function useResume() {
-  const [storage, setStorage] = useState<ResumeStorage>(() => {
-    try {
-      // 1. Try to load V2 data
-      const savedV2 = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (savedV2) {
-        return JSON.parse(savedV2);
-      }
+function loadStorage(storageKey: string, defaultData: ResumeData): ResumeStorage {
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      return JSON.parse(saved);
+    }
 
-      // 2. Try to migrate from V1 data
+    // Only try V1 migration for guest mode
+    if (storageKey === GUEST_STORAGE_KEY) {
       const savedV1 = localStorage.getItem(OLD_LOCAL_STORAGE_KEY);
       if (savedV1) {
         const v1Data = JSON.parse(savedV1);
@@ -34,29 +35,42 @@ export function useResume() {
           resumes: [migrated],
         };
       }
-    } catch (e) {
-      console.error('Failed to load resume data:', e);
     }
-    
-    // 3. Default fallback
-    return {
-      activeResumeId: initialResumeData.id,
-      resumes: [initialResumeData],
-    };
-  });
+  } catch (e) {
+    console.error('Failed to load resume data:', e);
+  }
+
+  return {
+    activeResumeId: defaultData.id,
+    resumes: [defaultData],
+  };
+}
+
+export function useResume(isAdmin: boolean = false) {
+  const storageKey = isAdmin ? ADMIN_STORAGE_KEY : GUEST_STORAGE_KEY;
+  const defaultData = isAdmin ? adminResumeData : initialResumeData;
+
+  const [storage, setStorage] = useState<ResumeStorage>(() =>
+    loadStorage(storageKey, defaultData)
+  );
+
+  // Reload storage when admin mode changes
+  useEffect(() => {
+    setStorage(loadStorage(storageKey, defaultData));
+  }, [isAdmin, storageKey]);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(storage));
-  }, [storage]);
+    localStorage.setItem(storageKey, JSON.stringify(storage));
+  }, [storage, storageKey]);
 
   const activeResume = storage.resumes.find(r => r.id === storage.activeResumeId) || storage.resumes[0];
 
   const updatePersonalInfo = (info: Partial<ResumeData['personalInfo']>) => {
     setStorage(prev => ({
       ...prev,
-      resumes: prev.resumes.map(r => 
-        r.id === prev.activeResumeId 
-          ? { ...r, personalInfo: { ...r.personalInfo, ...info } } 
+      resumes: prev.resumes.map(r =>
+        r.id === prev.activeResumeId
+          ? { ...r, personalInfo: { ...r.personalInfo, ...info } }
           : r
       )
     }));
@@ -65,9 +79,9 @@ export function useResume() {
   const updateSections = (sections: ResumeData['sections']) => {
     setStorage(prev => ({
       ...prev,
-      resumes: prev.resumes.map(r => 
-        r.id === prev.activeResumeId 
-          ? { ...r, sections } 
+      resumes: prev.resumes.map(r =>
+        r.id === prev.activeResumeId
+          ? { ...r, sections }
           : r
       )
     }));
@@ -77,10 +91,10 @@ export function useResume() {
     setStorage(prev => ({ ...prev, activeResumeId: id }));
   };
 
-  const createResume = (title: string = '新简历') => {
+  const createResume = useCallback((title: string = '新简历') => {
     const newId = uuidv4();
     const newResume: ResumeData = {
-      ...initialResumeData,
+      ...defaultData,
       id: newId,
       versionTitle: title,
     };
@@ -88,7 +102,7 @@ export function useResume() {
       activeResumeId: newId,
       resumes: [...prev.resumes, newResume]
     }));
-  };
+  }, [defaultData]);
 
   const duplicateResume = (id: string) => {
     const toDuplicate = storage.resumes.find(r => r.id === id);
@@ -129,8 +143,8 @@ export function useResume() {
   const resetToDefault = () => {
     setStorage(prev => ({
       ...prev,
-      resumes: prev.resumes.map(r => 
-        r.id === prev.activeResumeId ? { ...initialResumeData, id: r.id, versionTitle: r.versionTitle } : r
+      resumes: prev.resumes.map(r =>
+        r.id === prev.activeResumeId ? { ...defaultData, id: r.id, versionTitle: r.versionTitle } : r
       )
     }));
   };

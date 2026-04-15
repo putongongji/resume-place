@@ -1,11 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link, FileText, ArrowRight, Loader2, UploadCloud, File as FileIcon, X, AlertCircle } from 'lucide-react';
+import { Turnstile } from '@marsidev/react-turnstile';
 import { extractTextFromPDF } from '../../utils/pdfParser';
 import type { AnalysisStatus } from '../../types/analysis';
 
 interface Props {
   status: AnalysisStatus;
-  onAnalyze: (input: string, isUrl: boolean, customResumeText?: string) => void;
+  onAnalyze: (input: string, isUrl: boolean, extra?: { customResumeText?: string; turnstileToken?: string; adminSecret?: string }) => void;
 }
 
 export function JDInput({ status, onAnalyze }: Props) {
@@ -16,13 +17,55 @@ export function JDInput({ status, onAnalyze }: Props) {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [pdfError, setPdfError] = useState('');
+  
+  // Rate limiting & Security states
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [adminSecret, setAdminSecret] = useState(() => localStorage.getItem('ADMIN_SECRET') || '');
+  const [clickCount, setClickCount] = useState(0);
+  const [localLimitReached, setLocalLimitReached] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isLoading = status === 'fetching-jd' || status === 'analyzing' || isParsing;
   const currentInput = mode === 'text' ? text : url;
+  
+  // 检查是否受限
+  useEffect(() => {
+    if (adminSecret) {
+      setLocalLimitReached(false);
+      return;
+    }
+    const today = new Date().toDateString();
+    const usage = JSON.parse(localStorage.getItem('ai-usage') || '{}');
+    if (usage.date !== today) {
+      localStorage.setItem('ai-usage', JSON.stringify({ date: today, count: 0 }));
+    } else if (usage.count >= 30) {
+      setLocalLimitReached(true);
+    }
+  }, [adminSecret]);
+
   const canSubmit = currentInput.trim().length > 0 && 
     (resumeSource === 'builder' || (resumeSource === 'pdf' && pdfFile)) && 
-    !isLoading;
+    !isLoading &&
+    (turnstileToken || adminSecret) && // require turnstile or admin override
+    !localLimitReached;
+
+  // VIP 彩蛋逻辑
+  const handleSecretClick = () => {
+    setClickCount(p => p + 1);
+    if (clickCount + 1 >= 5) {
+      const secret = prompt('进入 Admin 模式: 请输入特权密码以解除所有限制');
+      if (secret) {
+        localStorage.setItem('ADMIN_SECRET', secret);
+        setAdminSecret(secret);
+        alert('特权模式已激活！');
+      } else {
+        localStorage.removeItem('ADMIN_SECRET');
+        setAdminSecret('');
+      }
+      setClickCount(0);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -47,6 +90,14 @@ export function JDInput({ status, onAnalyze }: Props) {
   const handleSubmit = async () => {
     if (!canSubmit) return;
     
+    // 更新使用频率记录
+    if (!adminSecret) {
+      const usage = JSON.parse(localStorage.getItem('ai-usage') || '{}');
+      usage.count = (usage.count || 0) + 1;
+      localStorage.setItem('ai-usage', JSON.stringify(usage));
+      if (usage.count >= 30) setLocalLimitReached(true);
+    }
+    
     let customText: string | undefined;
     
     if (resumeSource === 'pdf' && pdfFile) {
@@ -65,7 +116,11 @@ export function JDInput({ status, onAnalyze }: Props) {
       setIsParsing(false);
     }
 
-    onAnalyze(currentInput.trim(), mode === 'url', customText);
+    onAnalyze(currentInput.trim(), mode === 'url', {
+      customResumeText: customText,
+      turnstileToken,
+      adminSecret
+    });
   };
 
   return (
@@ -73,7 +128,12 @@ export function JDInput({ status, onAnalyze }: Props) {
       
       {/* 简历来源 */}
       <div className="flex flex-col gap-2.5">
-        <label className="text-[12px] font-semibold text-[#666]">选择要分析的简历</label>
+        <label 
+          className="text-[12px] font-semibold text-[#666] select-none"
+          onClick={handleSecretClick}
+        >
+          选择要分析的简历 {adminSecret && '👑'}
+        </label>
         <div className="flex gap-1 p-0.5 bg-[#f5f5f5] rounded-lg w-fit">
           <button
             className={`btn text-[12px] px-3 py-1.5 rounded-md transition-all ${
@@ -144,7 +204,6 @@ export function JDInput({ status, onAnalyze }: Props) {
       <div className="flex flex-col gap-2.5">
         <label className="text-[12px] font-semibold text-[#666]">输入目标岗位要求 (JD)</label>
         
-        {/* Mode toggle */}
         <div className="flex gap-1 p-0.5 bg-[#f5f5f5] rounded-lg w-fit">
           <button
             className={`btn text-[12px] px-3 py-1.5 rounded-md transition-all ${
@@ -187,6 +246,21 @@ export function JDInput({ status, onAnalyze }: Props) {
           />
         )}
       </div>
+      
+      {/* Turnstile / Rate Limit Warning */}
+      {!adminSecret && localLimitReached ? (
+        <div className="text-[12px] text-red-500 bg-red-50 p-3 rounded-lg border border-red-100 flex items-center gap-2">
+          <AlertCircle size={14} /> 
+          已达到今日免费体验次数上限 (30次)。请明天再来。
+        </div>
+      ) : !adminSecret && (
+        <div className="flex justify-center my-1 scale-90">
+          <Turnstile 
+            siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'} 
+            onSuccess={setTurnstileToken}
+          />
+        </div>
+      )}
 
       {/* Submit */}
       <button
@@ -202,7 +276,7 @@ export function JDInput({ status, onAnalyze }: Props) {
           </>
         ) : (
           <>
-            开始分析 <ArrowRight size={16} />
+            {localLimitReached && !adminSecret ? '今日次数已用完' : '开始分析'} <ArrowRight size={16} />
           </>
         )}
       </button>

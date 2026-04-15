@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useResume } from './hooks/useResume';
 import { useAnalysis } from './hooks/useAnalysis';
+import { useAuth } from './hooks/useAuth';
 import { PersonalInfoForm } from './components/Editor/PersonalInfoForm';
 import { SectionEditor } from './components/Editor/SectionEditor';
 import { PreviewPane } from './components/Preview/PreviewPane';
 import { ResumeManager } from './components/Editor/ResumeManager';
 import { AIPanel } from './components/AIPanel/AIPanel';
-import { Plus, Download, RotateCcw, Sparkles } from 'lucide-react';
+import { AdminLoginModal, AdminBadge } from './components/Auth/AdminLoginModal';
+import { Plus, Download, RotateCcw, Sparkles, Shield } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import {
   DndContext,
@@ -26,6 +28,9 @@ import {
 import type { Section } from './types/resume';
 
 function App() {
+  const { isAdmin, username, login, logout } = useAuth();
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+
   const {
     resumeData,
     allResumes,
@@ -38,11 +43,11 @@ function App() {
     deleteResume,
     renameResume,
     resetToDefault
-  } = useResume();
+  } = useResume(isAdmin);
 
   const { 
-    status, result, error, streamedText, history,
-    analyze, reset: resetAnalysis, setStatus, setResult, deleteHistory 
+    status, result, error, history,
+    analyze, reset: resetAnalysis, setStatus, setResult, deleteHistory
   } = useAnalysis();
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
 
@@ -94,12 +99,16 @@ function App() {
     updateSections([...resumeData.sections, newSection]);
   };
 
-  const handleAnalyze = (input: string, isUrl: boolean, customResumeText?: string) => {
-    analyze(resumeData, input, isUrl, customResumeText);
+  const handleAnalyze = (input: string, isUrl: boolean, extra?: { customResumeText?: string; turnstileToken?: string; adminSecret?: string }) => {
+    analyze(resumeData, input, isUrl, extra);
   };
 
   const handleResetAnalysis = () => {
     resetAnalysis();
+  };
+
+  const handleLogout = () => {
+    logout();
   };
 
   return (
@@ -111,14 +120,30 @@ function App() {
         {/* Header */}
         <div className="sticky top-0 z-20 bg-white border-b border-[#f0f0f0]">
           <div className="flex justify-between items-center px-8 py-5">
-            <h1 className="heading-1">简历</h1>
-            <button
-              className="btn-icon"
-              onClick={resetToDefault}
-              title="重置示例数据"
-            >
-              <RotateCcw size={16} />
-            </button>
+            <div className="flex items-center gap-3">
+              <h1 className="heading-1">简历</h1>
+              {isAdmin && (
+                <AdminBadge username={username} onLogout={handleLogout} />
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              {!isAdmin && (
+                <button
+                  className="btn-icon admin-trigger"
+                  onClick={() => setLoginModalOpen(true)}
+                  title="管理员登录"
+                >
+                  <Shield size={16} />
+                </button>
+              )}
+              <button
+                className="btn-icon"
+                onClick={resetToDefault}
+                title="重置示例数据"
+              >
+                <RotateCcw size={16} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -217,7 +242,6 @@ function App() {
         status={status}
         result={result}
         error={error}
-        streamedText={streamedText}
         history={history}
         onAnalyze={handleAnalyze}
         onReset={handleResetAnalysis}
@@ -226,6 +250,13 @@ function App() {
           setStatus('complete');
         }}
         onDeleteHistoryItem={deleteHistory}
+      />
+
+      {/* ─── Admin Login Modal ─── */}
+      <AdminLoginModal
+        open={loginModalOpen}
+        onClose={() => setLoginModalOpen(false)}
+        onLogin={login}
       />
     </div>
   );
