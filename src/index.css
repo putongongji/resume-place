@@ -605,6 +605,7 @@
     overflow: visible !important;
     background: white !important;
     box-shadow: none !important;
+    display: flex !important;
   }
 
   .a4-page {
@@ -617,5 +618,33 @@
     box-sizing: border-box !important;
     page-break-after: auto !important;
     transform: none !important;
+  }
+
+  .mobile-preview-scale {
+    transform: none !important;
+    width: auto !important;
+    margin: 0 !important;
+  }
+}
+
+/* ─── Mobile Responsive ─── */
+@media (max-width: 1023px) {
+  /* Scale A4 preview to fit mobile viewport */
+  .mobile-preview-scale {
+    transform-origin: top center;
+    transform: scale(min(1, calc((100vw - 32px) / 210mm)));
+    width: 210mm;
+    margin-bottom: -200px; /* compensate for scaled empty space */
+  }
+
+  /* AI panel full-width on mobile */
+  .ai-panel {
+    width: 100vw !important;
+    border-left: none !important;
+  }
+
+  /* Safe area for iPhone bottom bar */
+  .safe-bottom {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   }
 }

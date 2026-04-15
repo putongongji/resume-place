@@ -8,7 +8,7 @@ import { PreviewPane } from './components/Preview/PreviewPane';
 import { ResumeManager } from './components/Editor/ResumeManager';
 import { AIPanel } from './components/AIPanel/AIPanel';
 import { AdminLoginModal, AdminBadge } from './components/Auth/AdminLoginModal';
-import { Plus, Download, RotateCcw, Sparkles, Shield } from 'lucide-react';
+import { Plus, Download, RotateCcw, Sparkles, Shield, PenLine, Eye, Share2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import {
   DndContext,
@@ -50,13 +50,32 @@ function App() {
     analyze, reset: resetAnalysis, setStatus, setResult, deleteHistory
   } = useAnalysis();
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'edit' | 'preview'>('edit');
 
-  const handlePrint = () => {
+  // Detect mobile
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+
+  const handleExport = async () => {
     const { name } = resumeData.personalInfo;
     const versionTitle = resumeData.versionTitle;
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const filename = `${name || '简历'}-${versionTitle}-${date}`;
 
+    // On mobile, try Web Share API first if available
+    if (isMobile && 'share' in navigator) {
+      try {
+        // Use print-to-PDF approach but set title for the share
+        const originalTitle = document.title;
+        document.title = filename;
+        window.print();
+        document.title = originalTitle;
+        return;
+      } catch {
+        // Fall through to regular print
+      }
+    }
+
+    // Desktop or fallback: standard print
     const originalTitle = document.title;
     document.title = filename;
     window.print();
@@ -114,12 +133,36 @@ function App() {
   return (
     <div className="flex flex-col lg:flex-row h-screen w-full overflow-hidden bg-[#f5f5f5]">
 
+      {/* ─── Mobile Tab Bar ─── */}
+      <div className="lg:hidden flex bg-white border-b border-[#eee] print-hide shrink-0">
+        <button
+          className={`flex-1 flex items-center justify-center gap-2 py-3 text-[13px] font-medium transition-colors ${
+            mobileTab === 'edit' ? 'text-black border-b-2 border-black' : 'text-[#999]'
+          }`}
+          onClick={() => setMobileTab('edit')}
+        >
+          <PenLine size={15} />
+          编辑
+        </button>
+        <button
+          className={`flex-1 flex items-center justify-center gap-2 py-3 text-[13px] font-medium transition-colors ${
+            mobileTab === 'preview' ? 'text-black border-b-2 border-black' : 'text-[#999]'
+          }`}
+          onClick={() => setMobileTab('preview')}
+        >
+          <Eye size={15} />
+          预览
+        </button>
+      </div>
+
       {/* ─── Editor ─── */}
-      <div className="editor-pane w-full lg:w-[520px] lg:max-w-[42vw] h-[50vh] lg:h-screen shrink-0 overflow-y-auto bg-white flex flex-col relative print-hide border-r border-[#eee]">
+      <div className={`editor-pane w-full lg:w-[520px] lg:max-w-[42vw] lg:h-screen shrink-0 overflow-y-auto bg-white flex flex-col relative print-hide border-r border-[#eee] ${
+        mobileTab === 'edit' ? 'flex-1' : 'hidden lg:flex'
+      }`}>
 
         {/* Header */}
         <div className="sticky top-0 z-20 bg-white border-b border-[#f0f0f0]">
-          <div className="flex justify-between items-center px-8 py-5">
+          <div className="flex justify-between items-center px-5 lg:px-8 py-4 lg:py-5">
             <div className="flex items-center gap-3">
               <h1 className="heading-1">简历</h1>
               {isAdmin && (
@@ -148,7 +191,7 @@ function App() {
         </div>
 
         {/* Content */}
-        <div className="px-8 py-6 flex-1 flex flex-col gap-8">
+        <div className="px-5 lg:px-8 py-5 lg:py-6 flex-1 flex flex-col gap-6 lg:gap-8">
 
           <ResumeManager
             resumes={allResumes}
@@ -203,16 +246,18 @@ function App() {
             </button>
           </div>
 
-          {/* Bottom spacing */}
-          <div className="h-12" />
+          {/* Bottom spacing for mobile FAB */}
+          <div className="h-20 lg:h-12" />
         </div>
       </div>
 
       {/* ─── Preview ─── */}
-      <div className="preview-pane flex-1 overflow-y-auto overflow-x-auto flex justify-center items-start relative z-0">
+      <div className={`preview-pane flex-1 overflow-y-auto overflow-x-auto flex justify-center items-start relative z-0 ${
+        mobileTab === 'preview' ? '' : 'hidden lg:flex'
+      }`}>
 
-        {/* FABs */}
-        <div className="fixed bottom-8 right-8 z-30 print-hide flex gap-3">
+        {/* FABs — Desktop */}
+        <div className="hidden lg:flex fixed bottom-8 right-8 z-30 print-hide gap-3">
           <button
             className="btn btn-secondary shadow-[0_4px_24px_rgba(0,0,0,0.08)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.12)] bg-white"
             onClick={() => setAiPanelOpen(true)}
@@ -222,7 +267,7 @@ function App() {
           </button>
           <button
             className="btn btn-primary shadow-[0_4px_24px_rgba(0,0,0,0.15)] hover:shadow-[0_8px_40px_rgba(0,0,0,0.25)]"
-            onClick={handlePrint}
+            onClick={handleExport}
           >
             <Download size={16} />
             导出 PDF
@@ -230,9 +275,27 @@ function App() {
         </div>
 
         {/* A4 Paper */}
-        <div className="my-8 lg:my-12 mx-auto shadow-[0_1px_4px_rgba(0,0,0,0.04),0_8px_32px_rgba(0,0,0,0.06)] print:shadow-none bg-white min-w-max">
+        <div className="my-4 lg:my-12 mx-auto shadow-[0_1px_4px_rgba(0,0,0,0.04),0_8px_32px_rgba(0,0,0,0.06)] print:shadow-none bg-white mobile-preview-scale">
           <PreviewPane data={resumeData} />
         </div>
+      </div>
+
+      {/* ─── Mobile Bottom Bar ─── */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 print-hide bg-white border-t border-[#eee] px-4 py-3 flex gap-3 safe-bottom">
+        <button
+          className="btn btn-secondary flex-1 text-[13px] py-2.5 bg-white"
+          onClick={() => setAiPanelOpen(true)}
+        >
+          <Sparkles size={15} />
+          AI 分析
+        </button>
+        <button
+          className="btn btn-primary flex-1 text-[13px] py-2.5"
+          onClick={handleExport}
+        >
+          <Share2 size={15} />
+          导出 / 分享
+        </button>
       </div>
 
       {/* ─── AI Panel ─── */}

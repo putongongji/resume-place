@@ -18,8 +18,12 @@ export function JDInput({ status, onAnalyze }: Props) {
   const [isParsing, setIsParsing] = useState(false);
   const [pdfError, setPdfError] = useState('');
   
+  // Turnstile: only render if a real site key is configured
+  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY || '';
+  const hasTurnstile = turnstileSiteKey && turnstileSiteKey !== '1x00000000000000000000AA';
+  
   // Rate limiting & Security states
-  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState(hasTurnstile ? '' : 'no-turnstile');
   const [adminSecret, setAdminSecret] = useState(() => localStorage.getItem('ADMIN_SECRET') || '');
   const [clickCount, setClickCount] = useState(0);
   const [localLimitReached, setLocalLimitReached] = useState(false);
@@ -253,10 +257,10 @@ export function JDInput({ status, onAnalyze }: Props) {
           <AlertCircle size={14} /> 
           已达到今日免费体验次数上限 (30次)。请明天再来。
         </div>
-      ) : !adminSecret && (
+      ) : !adminSecret && hasTurnstile && (
         <div className="flex justify-center my-1 scale-90">
           <Turnstile 
-            siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'} 
+            siteKey={turnstileSiteKey} 
             onSuccess={setTurnstileToken}
           />
         </div>
