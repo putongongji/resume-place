@@ -43,6 +43,25 @@ export function ItemEditor({ item, onChange, onDelete }: Props) {
     autoResize(textareaRef.current);
   }, [item.description]);
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const target = e.target as HTMLTextAreaElement;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const value = target.value;
+      
+      const newValue = value.substring(0, start) + '  ' + value.substring(end);
+      handleChange('description', newValue);
+      
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          textareaRef.current.selectionStart = textareaRef.current.selectionEnd = start + 2;
+        }
+      });
+    }
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -108,6 +127,7 @@ export function ItemEditor({ item, onChange, onDelete }: Props) {
           style={{ lineHeight: '1.6', minHeight: '40px' }}
           value={item.description || ''}
           onChange={(e) => handleChange('description', e.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder="详细描述，支持 Markdown..."
           rows={2}
           onInput={(e) => autoResize(e.target as HTMLTextAreaElement)}

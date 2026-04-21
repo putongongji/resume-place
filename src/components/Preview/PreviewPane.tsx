@@ -1,5 +1,6 @@
 import type { ResumeData } from '../../types/resume';
 import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 
 interface Props {
   data: ResumeData;
@@ -130,16 +131,18 @@ export function PreviewPane({ data }: Props) {
                       {item.description && (
                         <div style={{ marginTop: '0.25rem', fontSize: '14px', color: '#000000' }}>
                           <ReactMarkdown
+                            remarkPlugins={[remarkBreaks]}
                             components={{
                               p: ({node, ...props}) => <p style={{ margin: '0.25rem 0', textAlign: 'justify' }} {...props} />,
-                              ul: ({node, ...props}) => <ul style={{ listStyleType: 'disc', listStylePosition: 'inside', margin: '0.25rem 0', paddingLeft: '0.1rem' }} {...props} />,
+                              ul: ({node, ...props}) => <ul style={{ listStyleType: 'disc', margin: '0.25rem 0 0.25rem 1.2rem', paddingLeft: '0' }} {...props} />,
+                              ol: ({node, ...props}) => <ol style={{ listStyleType: 'decimal', margin: '0.25rem 0 0.25rem 1.2rem', paddingLeft: '0' }} {...props} />,
                               li: ({node, ...props}) => <li style={{ margin: '0.25rem 0', textAlign: 'justify' }} {...props} />,
                               strong: ({node, ...props}) => <strong style={{ fontWeight: 'bold' }} {...props} />,
                               em: ({node, ...props}) => <em style={{ fontStyle: 'normal', fontWeight: 'bold' }} {...props} />,
                               a: ({node, ...props}) => <a style={{ color: 'inherit', textDecoration: 'underline' }} {...props} />
                             }}
                           >
-                            {item.description}
+                            {item.description.replace(/\n[ \t]*(?=\n)/g, '\n\u200B')}
                           </ReactMarkdown>
                         </div>
                       )}
